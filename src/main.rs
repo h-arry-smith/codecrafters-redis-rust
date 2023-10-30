@@ -1,4 +1,5 @@
 use anyhow::Result;
+use redis::{Command, CommandMessage};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -8,12 +9,9 @@ use tokio::{
     },
 };
 
-#[derive(Debug)]
-enum Command {
-    Ping { resp: oneshot::Sender<String> },
-}
+mod redis;
 
-async fn handle_connection(stream: &mut TcpStream, tx: Sender<Command>) {
+async fn handle_connection(stream: &mut TcpStream, tx: Sender<CommandMessage>) {
     loop {
         let mut buffer = [0; 1024];
         let read_amount = stream.read(&mut buffer).await.unwrap();
@@ -30,7 +28,7 @@ async fn handle_connection(stream: &mut TcpStream, tx: Sender<Command>) {
 
         let (resp_tx, resp_rx) = oneshot::channel();
 
-        tx.send(Command::Ping { resp: resp_tx }).await.unwrap();
+        tx.send((Command::Ping, resp_tx)).await.unwrap();
         eprintln!("send ping command over oneshot");
 
         let response = resp_rx.await.unwrap();
@@ -44,7 +42,7 @@ async fn handle_connection(stream: &mut TcpStream, tx: Sender<Command>) {
 async fn main() -> Result<()> {
     let (tx, mut rx) = mpsc::channel(32);
 
-    let server = tokio::spawn(async move {
+    let server_task = tokio::spawn(async move {
         let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
         eprintln!("Listening on {}", listener.local_addr().unwrap());
 
@@ -60,20 +58,17 @@ async fn main() -> Result<()> {
         }
     });
 
-    let message_handler = tokio::spawn(async move {
-        while let Some(cmd) = rx.recv().await {
+    let redis_task = tokio::spawn(async move {
+        let redis = redis::Redis::new();
+
+        while let Some((cmd, resp)) = rx.recv().await {
             println!("Received command over mpsc: {:?}", cmd);
-            match cmd {
-                Command::Ping { resp } => {
-                    println!("Sending pong over oneshot");
-                    resp.send("+PONG\r\n".to_string()).unwrap();
-                }
-            }
+            redis.handle_command(cmd, resp);
         }
     });
 
-    server.await.unwrap();
-    message_handler.await.unwrap();
+    server_task.await.unwrap();
+    redis_task.await.unwrap();
 
     Ok(())
 }
