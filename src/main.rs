@@ -5,14 +5,20 @@ use std::{
 };
 
 fn handle_connection(stream: &mut TcpStream) -> Result<()> {
-    let mut buffer = [0; 1024];
-    stream
-        .read(&mut buffer)
-        .context("Failed to read from stream")?;
+    loop {
+        let mut buffer = [0; 1024];
+        let read_amount = stream
+            .read(&mut buffer)
+            .context("Failed to read from stream")?;
 
-    stream
-        .write_all(b"+PONG\r\n")
-        .context("Failed to write to stream")?;
+        if read_amount == 0 {
+            break;
+        }
+
+        stream
+            .write_all(b"+PONG\r\n")
+            .context("Failed to write to stream")?;
+    }
 
     Ok(())
 }
