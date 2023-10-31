@@ -5,11 +5,12 @@ use crate::redis::RedisValue;
 pub struct Rdb {}
 
 impl Rdb {
-    pub fn load_from_path(path: PathBuf) -> HashMap<String, RedisValue> {
+    pub fn load_from_path(path: PathBuf) -> (HashMap<String, RedisValue>, HashMap<String, u64>) {
         let mut store = HashMap::new();
+        let mut expiry_table = HashMap::new();
 
         if !path.exists() {
-            return store;
+            return (store, expiry_table);
         }
 
         let file_contents = std::fs::read(path).unwrap();
@@ -24,6 +25,10 @@ impl Rdb {
         // The 4 bytes are interpreted as ASCII characters and then converted to an integer using string to integer conversion.
         let _version = std::str::from_utf8(&slice[seek..seek + 4]).unwrap();
         seek += 4;
+
+        // FIXME: Storing expiry state as an optional isn't elegent, and it would be better to have a 'decode_key_value_pair'
+        //        helper, that handle with or without expiry, for now this will do :^)
+        let mut maybe_expiry: Option<u64> = None;
 
         loop {
             if seek >= slice.len() {
@@ -55,19 +60,30 @@ impl Rdb {
                     let _expiry_hash_table_size = slice[seek + 1];
                     seek += 2;
                 }
+                0xFC => {
+                    let timestamp_bytes = &slice[seek..seek + 8];
+                    seek += 8;
+                    let timestamp = u64::from_le_bytes(timestamp_bytes.try_into().unwrap());
+                    maybe_expiry = Some(timestamp);
+                }
                 0x0 => {
                     let key =
                         Rdb::read_length_encoding(slice, &mut seek).decode_from(slice, &mut seek);
                     let value =
                         Rdb::read_length_encoding(slice, &mut seek).decode_from(slice, &mut seek);
 
-                    store.insert(key, RedisValue::String(value));
+                    store.insert(key.clone(), RedisValue::String(value));
+                    let expiry = maybe_expiry.take();
+                    if let Some(expiry) = expiry {
+                        eprintln!("inserting expiry for key: {}, expiry: {}", key, expiry);
+                        expiry_table.insert(key, expiry);
+                    };
                 }
                 _ => todo!("opcode: 0x{:X} not implemented", opcode),
             }
         }
 
-        store
+        (store, expiry_table)
     }
 
     fn read_length_encoding(slice: &[u8], seek: &mut usize) -> LengthEncoding {

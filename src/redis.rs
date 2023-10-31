@@ -1,5 +1,9 @@
 use core::panic;
-use std::{collections::HashMap, path::PathBuf, time::Instant};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{oneshot, rdb::Rdb, resp::Resp};
 use bytes::Bytes;
@@ -13,7 +17,7 @@ pub enum RedisValue {
 
 pub struct Redis {
     store: HashMap<String, RedisValue>,
-    expiry_table: HashMap<String, Instant>,
+    expiry_table: HashMap<String, u64>,
     config: HashMap<String, String>,
 }
 
@@ -21,23 +25,24 @@ impl Redis {
     pub fn new(args: Vec<String>) -> Redis {
         let config = Self::parse_command_line_arguments(args);
 
-        let store = if config.contains_key("dir") && config.contains_key("dbfilename") {
-            let mut path = PathBuf::new();
-            path.push(config.get("dir").unwrap());
-            path.push(config.get("dbfilename").unwrap());
-            Self::load_store_from_path(path)
-        } else {
-            HashMap::new()
-        };
+        let (store, expiry_table) =
+            if config.contains_key("dir") && config.contains_key("dbfilename") {
+                let mut path = PathBuf::new();
+                path.push(config.get("dir").unwrap());
+                path.push(config.get("dbfilename").unwrap());
+                Self::load_store_from_path(path)
+            } else {
+                (HashMap::new(), HashMap::new())
+            };
 
         Redis {
             store,
-            expiry_table: HashMap::new(),
+            expiry_table,
             config,
         }
     }
 
-    fn load_store_from_path(path: PathBuf) -> HashMap<String, RedisValue> {
+    fn load_store_from_path(path: PathBuf) -> (HashMap<String, RedisValue>, HashMap<String, u64>) {
         Rdb::load_from_path(path)
     }
 
@@ -188,8 +193,7 @@ impl Redis {
         }
 
         if let Some(expiry) = expiry {
-            let now = Instant::now();
-            let expiry = now + std::time::Duration::from_millis(expiry);
+            let expiry = Self::ms_since_epoch() + expiry;
             self.expiry_table.insert(key.clone(), expiry);
         } else {
             self.expiry_table.remove(&key);
@@ -199,9 +203,19 @@ impl Redis {
         Resp::SimpleString("OK".to_string())
     }
 
+    fn ms_since_epoch() -> u64 {
+        let since_the_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+
+        since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000
+    }
+
     fn get(&self, key: String) -> Resp {
         if let Some(expiry) = self.expiry_table.get(&key) {
-            if expiry < &Instant::now() {
+            let time_now_in_ms = Self::ms_since_epoch();
+
+            eprintln!("expiry: {}, time_now_in_ms: {}", expiry, time_now_in_ms);
+
+            if expiry < &time_now_in_ms {
                 return Resp::Null;
             }
         }
