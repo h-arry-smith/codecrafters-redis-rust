@@ -1,13 +1,13 @@
 use core::panic;
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, path::PathBuf, time::Instant};
 
-use crate::{oneshot, resp::Resp};
+use crate::{oneshot, rdb::Rdb, resp::Resp};
 use bytes::Bytes;
 use oneshot::Sender;
 
 pub type CommandMessage = (String, Sender<String>);
 
-enum RedisValue {
+pub enum RedisValue {
     String(String),
 }
 
@@ -21,11 +21,27 @@ impl Redis {
     pub fn new(args: Vec<String>) -> Redis {
         let config = Self::parse_command_line_arguments(args);
 
+        dbg!(&config);
+
+        let store = if config.contains_key("dir") && config.contains_key("dbfilename") {
+            Self::load_store_from_path(PathBuf::from(format!(
+                "{}/{}",
+                config.get("dir").unwrap(),
+                config.get("dbfilename").unwrap()
+            )))
+        } else {
+            HashMap::new()
+        };
+
         Redis {
-            store: HashMap::new(),
+            store,
             expiry_table: HashMap::new(),
             config,
         }
+    }
+
+    fn load_store_from_path(path: PathBuf) -> HashMap<String, RedisValue> {
+        Rdb::load_from_path(path)
     }
 
     fn parse_command_line_arguments(args: Vec<String>) -> HashMap<String, String> {

@@ -9,6 +9,7 @@ use tokio::{
     },
 };
 
+mod rdb;
 mod redis;
 mod resp;
 
@@ -33,6 +34,7 @@ async fn handle_connection(stream: &mut TcpStream, tx: Sender<CommandMessage>) {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = std::env::args().collect::<Vec<_>>();
+    dbg!(&args);
     let (tx, mut rx) = mpsc::channel(32);
 
     let server_task = tokio::spawn(async move {
