@@ -17,12 +17,6 @@ async fn handle_connection(stream: &mut TcpStream, tx: Sender<CommandMessage>) {
         let mut buffer = [0; 1024];
         let read_amount = stream.read(&mut buffer).await.unwrap();
 
-        eprintln!(
-            "Read {} bytes for stream {}",
-            read_amount,
-            stream.local_addr().unwrap()
-        );
-
         if read_amount == 0 {
             break;
         }
@@ -30,12 +24,9 @@ async fn handle_connection(stream: &mut TcpStream, tx: Sender<CommandMessage>) {
         let (resp_tx, resp_rx) = oneshot::channel();
         let received_string = String::from_utf8_lossy(&buffer[..read_amount]).to_string();
         tx.send((received_string, resp_tx)).await.unwrap();
-        eprintln!("send ping command over oneshot");
 
         let response = resp_rx.await.unwrap();
-        eprintln!("received response over oneshot");
         stream.write_all(response.as_bytes()).await.unwrap();
-        eprintln!("wrote response to stream {}", stream.peer_addr().unwrap());
     }
 }
 
@@ -46,12 +37,10 @@ async fn main() -> Result<()> {
 
     let server_task = tokio::spawn(async move {
         let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
-        eprintln!("Listening on {}", listener.local_addr().unwrap());
 
         loop {
             let mut handles = Vec::new();
             let (mut stream, _) = listener.accept().await.unwrap();
-            eprintln!("Accepted connection from {}", stream.peer_addr().unwrap());
 
             let task_tx = tx.clone();
             handles.push(tokio::spawn(async move {

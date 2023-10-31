@@ -178,17 +178,14 @@ impl Resp {
         b.advance(1);
 
         let string = String::from_utf8_lossy(b);
-        dbg!(&string);
 
         let (len_str, _) = string.split_once("\r\n").ok_or(())?;
         let len = len_str.parse::<usize>().map_err(|_| ())?;
 
-        dbg!(&len);
         b.advance(len_str.len() + 2);
 
         let mut arr = Vec::with_capacity(len);
         for _ in 0..len {
-            dbg!(&b);
             let resp = Self::decode_bytes(b)?;
             arr.push(resp);
         }
