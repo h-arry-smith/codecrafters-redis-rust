@@ -1,6 +1,7 @@
 use core::panic;
 
 use crate::{oneshot, resp::Resp};
+use bytes::Bytes;
 use oneshot::Sender;
 
 pub type CommandMessage = (String, Sender<String>);
@@ -33,11 +34,15 @@ impl Redis {
         resp.send(encoded_response).unwrap();
     }
 
-    pub fn parse_command(command: Resp, _args: Vec<Resp>) -> Command {
+    pub fn parse_command(command: Resp, args: Vec<Resp>) -> Command {
         let command = command.to_string().to_lowercase();
 
         match command.as_str() {
             "ping" => Command::Ping,
+            "echo" => {
+                let message = args[0].to_string();
+                Command::Echo { message }
+            }
             _ => {
                 panic!("Invalid command");
             }
@@ -46,10 +51,8 @@ impl Redis {
 
     pub fn handle_command(&self, command: Command) -> Resp {
         match command {
-            Command::Ping => {
-                eprintln!("Received ping command");
-                Resp::SimpleString("PONG".to_string())
-            }
+            Command::Ping => Resp::SimpleString("PONG".to_string()),
+            Command::Echo { message } => Resp::BulkString(Bytes::from(message)),
         }
     }
 }
@@ -57,4 +60,5 @@ impl Redis {
 #[derive(Debug)]
 pub enum Command {
     Ping,
+    Echo { message: String },
 }
