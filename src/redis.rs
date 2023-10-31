@@ -21,14 +21,11 @@ impl Redis {
     pub fn new(args: Vec<String>) -> Redis {
         let config = Self::parse_command_line_arguments(args);
 
-        dbg!(&config);
-
         let store = if config.contains_key("dir") && config.contains_key("dbfilename") {
-            Self::load_store_from_path(PathBuf::from(format!(
-                "{}/{}",
-                config.get("dir").unwrap(),
-                config.get("dbfilename").unwrap()
-            )))
+            let mut path = PathBuf::new();
+            path.push(config.get("dir").unwrap());
+            path.push(config.get("dbfilename").unwrap());
+            Self::load_store_from_path(path)
         } else {
             HashMap::new()
         };
