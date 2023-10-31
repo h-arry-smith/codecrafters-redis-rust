@@ -108,9 +108,13 @@ impl Redis {
                     _ => todo!("subcommand: config {} not implemented", subcommand),
                 }
             }
-            cmd => {
-                panic!("Invalid command: {cmd}");
+            "keys" => {
+                let pattern = args[0].to_string();
+                Command::Keys { pattern }
             }
+            cmd => Command::NotImplemented {
+                cmd: cmd.to_string(),
+            },
         }
     }
 
@@ -157,6 +161,17 @@ impl Redis {
                 } else {
                     Resp::Null
                 }
+            }
+            Command::Keys { pattern: _ } => {
+                // TODO: Implement pattern matching
+                let mut keys = Vec::new();
+                for key in self.store.keys() {
+                    keys.push(Resp::BulkString(Bytes::from(key.clone())));
+                }
+                Resp::Array(keys)
+            }
+            Command::NotImplemented { cmd } => {
+                Resp::SimpleError(format!("ERR command '{}' not implemented yet", cmd))
             }
         }
     }
@@ -215,5 +230,11 @@ pub enum Command {
     // TODO: CONFIG GET actually supports multiple glob like parameters, but we only support the simple case
     ConfigGet {
         key: String,
+    },
+    Keys {
+        pattern: String,
+    },
+    NotImplemented {
+        cmd: String,
     },
 }

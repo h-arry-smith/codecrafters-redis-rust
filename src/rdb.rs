@@ -22,7 +22,7 @@ impl Rdb {
 
         // The next 4 bytes store the version number of the rdb format.
         // The 4 bytes are interpreted as ASCII characters and then converted to an integer using string to integer conversion.
-        let version = std::str::from_utf8(&slice[seek..seek + 4]).unwrap();
+        let _version = std::str::from_utf8(&slice[seek..seek + 4]).unwrap();
         seek += 4;
 
         loop {
@@ -41,18 +41,18 @@ impl Rdb {
                 }
                 0xFA => {
                     let length_encoding = Rdb::read_length_encoding(slice, &mut seek);
-                    let first_string = length_encoding.decode_from(slice, &mut seek);
+                    let _first_string = length_encoding.decode_from(slice, &mut seek);
                     let length_encoding = Rdb::read_length_encoding(slice, &mut seek);
-                    let second_string = length_encoding.decode_from(slice, &mut seek);
+                    let _second_string = length_encoding.decode_from(slice, &mut seek);
                 }
                 0xFE => {
                     let length_encoding = Rdb::read_length_encoding(slice, &mut seek);
-                    let key = length_encoding.decode_from(slice, &mut seek);
+                    let _key = length_encoding.decode_from(slice, &mut seek);
                 }
                 0xFB => {
                     // TODO: Docs are poor for this opcode, this might not be correct when size exceeds a byte
-                    let db_hash_table_size = slice[seek];
-                    let expiry_hash_table_size = slice[seek + 1];
+                    let _db_hash_table_size = slice[seek];
+                    let _expiry_hash_table_size = slice[seek + 1];
                     seek += 2;
                 }
                 0x0 => {
@@ -85,7 +85,6 @@ impl Rdb {
                 let second_byte = slice[*seek];
                 *seek += 1;
                 let masked_first_byte = first_byte & 0b0011_1111;
-                let fourteen_bits = (masked_first_byte as u16) << 8 | (second_byte as u16);
 
                 LengthEncoding::FourteenBit((masked_first_byte as u16) << 8 | (second_byte as u16))
             }

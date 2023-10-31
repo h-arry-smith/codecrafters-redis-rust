@@ -54,7 +54,6 @@ async fn main() -> Result<()> {
         let mut redis = redis::Redis::new(args);
 
         while let Some((message, resp)) = rx.recv().await {
-            println!("Received command over mpsc: {:?}", message);
             redis.handle_message(message, resp).await;
         }
     });
