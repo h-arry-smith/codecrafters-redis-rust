@@ -14,14 +14,39 @@ enum RedisValue {
 pub struct Redis {
     store: HashMap<String, RedisValue>,
     expiry_table: HashMap<String, Instant>,
+    config: HashMap<String, String>,
 }
 
 impl Redis {
-    pub fn new() -> Redis {
+    pub fn new(args: Vec<String>) -> Redis {
+        let config = Self::parse_command_line_arguments(args);
+
         Redis {
             store: HashMap::new(),
             expiry_table: HashMap::new(),
+            config,
         }
+    }
+
+    fn parse_command_line_arguments(args: Vec<String>) -> HashMap<String, String> {
+        let mut args = args.iter().skip(1);
+        let mut config = HashMap::new();
+
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--dir" => {
+                    let value = args.next().unwrap();
+                    config.insert("dir".to_string(), value.to_string());
+                }
+                "--dbfilename" => {
+                    let value = args.next().unwrap();
+                    config.insert("dbfilename".to_string(), value.to_string());
+                }
+                _ => todo!("arg: {} not implemented", arg),
+            }
+        }
+
+        config
     }
 
     pub async fn handle_message(&mut self, message: String, resp: Sender<String>) {
@@ -60,8 +85,18 @@ impl Redis {
                 let key = args[0].to_string();
                 Command::Get { key }
             }
-            _ => {
-                panic!("Invalid command");
+            "config" => {
+                let subcommand = args[0].to_string();
+                match subcommand.as_str() {
+                    "get" => {
+                        let key = args[1].to_string();
+                        Command::ConfigGet { key }
+                    }
+                    _ => todo!("subcommand: config {} not implemented", subcommand),
+                }
+            }
+            cmd => {
+                panic!("Invalid command: {cmd}");
             }
         }
     }
@@ -100,6 +135,16 @@ impl Redis {
                 options,
             } => self.set(key, value, options),
             Command::Get { key } => self.get(key),
+            Command::ConfigGet { key } => {
+                if let Some(value) = self.config.get(&key) {
+                    Resp::Array(vec![
+                        Resp::BulkString(Bytes::from(key)),
+                        Resp::BulkString(Bytes::from(value.clone())),
+                    ])
+                } else {
+                    Resp::Null
+                }
+            }
         }
     }
 
@@ -152,6 +197,10 @@ pub enum Command {
         options: Vec<(String, Option<String>)>,
     },
     Get {
+        key: String,
+    },
+    // TODO: CONFIG GET actually supports multiple glob like parameters, but we only support the simple case
+    ConfigGet {
         key: String,
     },
 }
