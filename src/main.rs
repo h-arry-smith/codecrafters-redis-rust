@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
     });
 
     let redis_task = tokio::spawn(async move {
-        let redis = redis::Redis::new();
+        let mut redis = redis::Redis::new();
 
         while let Some((message, resp)) = rx.recv().await {
             println!("Received command over mpsc: {:?}", message);
