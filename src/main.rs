@@ -1,5 +1,5 @@
 use anyhow::Result;
-use redis::{Command, CommandMessage};
+use redis::CommandMessage;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -10,6 +10,7 @@ use tokio::{
 };
 
 mod redis;
+mod resp;
 
 async fn handle_connection(stream: &mut TcpStream, tx: Sender<CommandMessage>) {
     loop {
@@ -27,8 +28,8 @@ async fn handle_connection(stream: &mut TcpStream, tx: Sender<CommandMessage>) {
         }
 
         let (resp_tx, resp_rx) = oneshot::channel();
-
-        tx.send((Command::Ping, resp_tx)).await.unwrap();
+        let received_string = String::from_utf8_lossy(&buffer[..read_amount]).to_string();
+        tx.send((received_string, resp_tx)).await.unwrap();
         eprintln!("send ping command over oneshot");
 
         let response = resp_rx.await.unwrap();
@@ -61,9 +62,9 @@ async fn main() -> Result<()> {
     let redis_task = tokio::spawn(async move {
         let redis = redis::Redis::new();
 
-        while let Some((cmd, resp)) = rx.recv().await {
-            println!("Received command over mpsc: {:?}", cmd);
-            redis.handle_command(cmd, resp);
+        while let Some((message, resp)) = rx.recv().await {
+            println!("Received command over mpsc: {:?}", message);
+            redis.handle_message(message, resp).await;
         }
     });
 

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use bytes::{Buf, Bytes};
 
 #[derive(Debug, PartialEq)]
@@ -29,7 +31,6 @@ impl Resp {
             Resp::Array(arr) => Self::encode_array(arr),
             Resp::Boolean(bool) => Self::encode_bool(bool),
             Resp::Double(double) => Self::encode_double(double),
-            _ => todo!(),
         }
     }
 
@@ -223,8 +224,33 @@ impl Resp {
     }
 }
 
+impl Display for Resp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Resp::SimpleString(s) => write!(f, "{}", s),
+            Resp::SimpleError(s) => write!(f, "{}", s),
+            Resp::Integer(i) => write!(f, "{}", i),
+            Resp::BulkString(b) => write!(f, "{}", String::from_utf8_lossy(b)),
+            Resp::Array(b) => {
+                let mut s = String::from("[");
+                for resp in b {
+                    s.push_str(&format!("{},", resp));
+                }
+                s.push(']');
+                write!(f, "{}", s)
+            }
+            Resp::Null => write!(f, "null"),
+            Resp::Boolean(b) => write!(f, "{}", b),
+            Resp::Double(d) => write!(f, "{}", d),
+        }
+    }
+}
+
 mod test {
-    use super::*;
+    #[allow(unused_imports)]
+    use crate::resp::Resp;
+    #[allow(unused_imports)]
+    use bytes::Bytes;
 
     #[test]
     fn encode_simple_string() {
